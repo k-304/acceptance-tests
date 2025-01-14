@@ -910,6 +910,53 @@ class Server(CloudscaleResource):
         # Wait a few seconds for the DHCP to be applied
         time.sleep(5)
 
+    def prepare_nested_virtualization(self):
+        """ Prepare all packages to allow kvm virtualization. """
+
+        # Install the required package
+        self.run('sudo apt update')
+        self.run('sudo apt install -y libvirt-clients')
+
+        return self.run('sudo virt-host-validate').stdout
+
+    def setup_nested_virtualization(self, vm_os, vm_iso_url):
+        """ Create a KVM virtual machine. """
+
+        # Install the required package
+        self.prepare_nested_virtualization()
+        self.run(oneliner(f"""
+            sudo apt install -y
+                qemu-kvm
+                libvirt-daemon-system
+                bridge-utils
+                virt-manager
+        """))
+
+        # Make sure qemu tests pass and rc == 0
+        assert self.output_of('sudo virt-host-validate --help')
+
+        self.run(f'wget {vm_iso_url}')
+        self.run('sudo virsh net-start default')
+        self.run('sudo virsh net-autostart default')
+        self.run(f'qemu-img create -f qcow2 {vm_os}.qcow2 8G')
+        self.run(oneliner(f"""
+            sudo virt-install
+                --connect qemu:///system
+                --virt-type kvm
+                -n {vm_os}_vm
+                -r 512
+                --vcpus=1
+                --disk path={vm_os}.qcow2,size=12
+                -c /dev/cdrom
+                --noautoconsole
+                --os-variant {vm_os}
+                --hvm
+        """))
+        self.run(f'sudo virsh --connect qemu:///system start {vm_os}_vm')
+
+        # Return the part of the table that has the actual state for the VM
+        return self.output_of('sudo virsh -c qemu:///system list | sed -n 3p')
+
 
 class FloatingIP(CloudscaleResource):
 
