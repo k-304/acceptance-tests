@@ -224,6 +224,12 @@ def test_common_images_have_a_hosts_file(create_server, image):
     server = create_server(image=image)
 ```
 
+### Update README tests table
+If you add new tests, update the tests table:
+```console
+invoke implemented-tests-table
+```
+
 ### Commit Your Test
 
 ```console
